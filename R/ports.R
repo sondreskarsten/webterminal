@@ -11,10 +11,10 @@ terminal_port <- function(backend = NULL) {
 
 port_available <- function(port, host = "127.0.0.1") {
   tryCatch({
-    con <- socketConnection(
+    con <- suppressWarnings(socketConnection(
       host = host, port = port, open = "r",
       blocking = TRUE, timeout = 1L
-    )
+    ))
     close(con)
     FALSE
   }, error = function(e) {

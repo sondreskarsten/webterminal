@@ -91,6 +91,9 @@ spawn_daemon <- function(backend = NULL, port = NULL) {
   if (!is.null(bin$path)) Sys.setenv(WEBTERMINAL_BIN = bin$path)
 
   system2("bash", script, wait = FALSE, stdout = FALSE, stderr = FALSE)
+
+  Sys.unsetenv("WEBTERMINAL_PORT")
+  Sys.unsetenv("WEBTERMINAL_BIN")
   Sys.sleep(1)
 
   if (!port_listening(port)) {
