@@ -1,0 +1,35 @@
+Package: webterminal
+Title: Fast Browser-Based Terminal for 'RStudio Server'
+Version: 0.0.0.9000
+Authors@R:
+    person("Sondre Nærø", "Skarsten",
+           email = "Sondre.Naro.Skarsten@dnb.no",
+           role = c("aut", "cre", "cph"))
+Description: Opens a browser-based terminal inside the 'RStudio Server'
+    viewer pane by forwarding to a locally running 'ttyd' or 'shellinabox'
+    daemon and an optional 'tmux' session. The package does not install or
+    modify any system software; it only locates user-installed helper
+    binaries, manages daemon lifecycle, and proxies through 'RStudio
+    Server' built-in localhost URL proxy via 'rstudioapi'.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Language: en-US
+OS_type: unix
+Depends: R (>= 4.1.0)
+Imports:
+    tools,
+    utils,
+    rstudioapi (>= 0.11)
+Suggests:
+    cli (>= 3.6.0),
+    httpuv,
+    spelling,
+    testthat (>= 3.2.0),
+    withr
+SystemRequirements: 'ttyd' (>= 1.7) or 'shellinaboxd' (>= 2.21); 'tmux';
+    iproute2 ('ss'); bash
+URL: https://github.com/sondreskarsten/webterminal
+BugReports: https://github.com/sondreskarsten/webterminal/issues
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.0.0
