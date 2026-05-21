@@ -1,5 +1,17 @@
+---
+output: github_document
+---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
 
 # webterminal
 
@@ -11,20 +23,20 @@ Fast browser-based terminal for RStudio Server using `ttyd` or
 
 ## Installation
 
-``` r
+```{r install, eval = FALSE}
 # From GitHub
 pak::pak("sondreskarsten/webterminal")
 ```
 
 System dependencies (install once):
 
-``` bash
+```bash
 sudo apt-get install ttyd tmux iproute2
 ```
 
 ## Usage
 
-``` r
+```{r usage, eval = FALSE}
 library(webterminal)
 
 # Check setup
@@ -44,14 +56,13 @@ webterminal_snippet()
 
 ## How it works
 
-1.  `terminal_start()` launches `ttyd` (or `shellinaboxd`) bound to
-    `127.0.0.1` on a deterministic port.
-2.  `web_terminal()` calls `rstudioapi::viewer()` with the localhost
-    URL.
-3.  RStudio Server’s built-in `/p/<hex>/` reverse proxy forwards the
-    request to the daemon.
-4.  The terminal opens in your browser — native copy/paste, WebSocket
-    transport, optional `tmux` persistence.
+1. `terminal_start()` launches `ttyd` (or `shellinaboxd`) bound to
+   `127.0.0.1` on a deterministic port.
+2. `web_terminal()` calls `rstudioapi::viewer()` with the localhost URL.
+3. RStudio Server's built-in `/p/<hex>/` reverse proxy forwards the
+   request to the daemon.
+4. The terminal opens in your browser — native copy/paste, WebSocket
+   transport, optional `tmux` persistence.
 
 ## License
 

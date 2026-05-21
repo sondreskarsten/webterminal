@@ -1,9 +1,10 @@
+^.*\.Rproj$
 ^LICENSE\.md$
 ^README\.Rmd$
+^README\.md$
+^\.Rproj\.user$
 ^\.github$
 ^_pkgdown\.yml$
-^pkgdown$
 ^cran-comments\.md$
-^\.Rproj\.user$
-^.*\.Rproj$
 ^inst/WORDLIST$
+^pkgdown$
