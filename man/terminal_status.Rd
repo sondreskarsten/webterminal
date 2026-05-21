@@ -7,25 +7,56 @@
 terminal_status(backend = "all")
 }
 \arguments{
-\item{backend}{Which backend(s) to check. \code{"all"} checks every
-known backend. Otherwise, one of \code{"ttyd"}, \code{"ttyd-tmux"}, or
-\code{"shellinabox"}.}
+\item{backend}{Which backend(s) to check. \code{"all"} (default) checks
+every known backend. Otherwise, one of \code{"ttyd"}, \code{"ttyd-tmux"},
+or \code{"shellinabox"}. See \code{\link[=terminal_backends]{terminal_backends()}} for the full list.}
 }
 \value{
 A data frame with columns \code{backend}, \code{port}, \code{running},
-\code{pid}, invisibly.
+\code{pid}, invisibly. Can be used programmatically, e.g.
+\code{subset(terminal_status(), running)}.
 }
 \description{
 Checks each configured backend's port and reports whether a daemon
 is listening. Returns a data frame invisibly for programmatic use.
 }
+\details{
+For each backend, \code{terminal_status()} computes the deterministic
+port, probes it via TCP \code{socketConnection()}, and looks up the PID
+from the daemon registry (see \code{\link[=terminal_start]{terminal_start()}} for registry
+details). Dead PIDs are pruned automatically.
+
+The printed output uses \verb{[+]} for running daemons and \verb{[-]} for
+stopped ones, with the PID shown in parentheses when available.
+
+The returned data frame has one row per checked backend with
+columns:
+\describe{
+\item{\code{backend}}{Character. Backend name.}
+\item{\code{port}}{Integer. The port checked.}
+\item{\code{running}}{Logical. \code{TRUE} if something is listening.}
+\item{\code{pid}}{Integer. The daemon's PID from the registry, or
+\code{NA} if not tracked or not running.}
+}
+}
 \examples{
 \dontrun{
+# Check all backends
 terminal_status()
+
+# Check a specific backend
 terminal_status("ttyd")
+
+# Use programmatically
+s <- terminal_status()
+s[s$running, ]
 }
 }
 \seealso{
+\code{\link[=terminal_start]{terminal_start()}} and \code{\link[=terminal_stop]{terminal_stop()}} for daemon lifecycle,
+\code{\link[=web_terminal]{web_terminal()}} to open a running daemon in the viewer,
+\code{\link[=webterminal_doctor]{webterminal_doctor()}} for a full diagnostic report.
+
 Other webterminal:
 \code{\link[=terminal_backends]{terminal_backends()}},
 \code{\link[=terminal_start]{terminal_start()}},

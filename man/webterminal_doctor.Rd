@@ -2,26 +2,95 @@
 % Please edit documentation in R/webterminal_doctor.R
 \name{webterminal_doctor}
 \alias{webterminal_doctor}
+\alias{print.webterminal_config}
+\alias{format.webterminal_config}
 \title{Diagnose the webterminal setup}
 \usage{
 webterminal_doctor()
+
+\method{print}{webterminal_config}(x, ...)
+
+\method{format}{webterminal_config}(x, ...)
+}
+\arguments{
+\item{x}{A \code{webterminal_config} object returned by
+\code{\link[=webterminal_doctor]{webterminal_doctor()}}.}
+
+\item{...}{Additional arguments (currently unused).}
 }
 \value{
-A list of class \code{"webterminal_config"} with elements
-\code{ttyd}, \code{shellinaboxd}, \code{tmux}, \code{bash}, \code{ss}, \code{rstudio}, and
-\code{daemons}, invisibly.
+A list of class \code{"webterminal_config"} with elements:
+\describe{
+\item{\code{ttyd}}{List with \code{path}, \code{version}, \code{forced_by}.}
+\item{\code{shellinaboxd}}{List with \code{path}, \code{version}, \code{forced_by}.}
+\item{\code{tmux}}{List with \code{path}, \code{version}.}
+\item{\code{bash}}{List with \code{path}.}
+\item{\code{ss}}{List with \code{path}.}
+\item{\code{rstudio}}{List with \code{available} (logical).}
+\item{\code{daemons}}{List of daemon records (each a list with \code{pid},
+\code{port}, \code{backend}, \code{url}, \code{started}). Empty list if none
+running.}
+\item{\code{platform}}{Character. Operating system name from
+\code{Sys.info()}.}
+}
+Returned invisibly; the report is printed as a side effect.
 }
 \description{
 Checks for required system binaries, RStudio Server availability,
 port status, and prints a structured report with actionable hints
 for anything missing.
 }
+\details{
+\code{webterminal_doctor()} is the recommended first function to call
+after installing the package. It performs the following checks:
+
+\describe{
+\item{Binary detection}{Searches for \code{ttyd}, \code{shellinaboxd},
+\code{tmux}, \code{bash}, and \code{ss} using the same precedence as
+\code{\link[=terminal_start]{terminal_start()}}: environment variable override (e.g.
+\code{WEBTERMINAL_TTYD}), then \code{Sys.which()}. Reports the path and
+version of each found binary.}
+\item{RStudio detection}{Calls
+\code{\link[rstudioapi:isAvailable]{rstudioapi::isAvailable()}} to determine whether the
+\verb{/p/<hex>/} viewer proxy will work.}
+\item{Daemon inventory}{Reads the daemon registry from
+\code{tools::R_user_dir("webterminal", "cache")/daemons.rds},
+prunes dead PIDs, and lists surviving daemons with their port,
+PID, and start time.}
+\item{Install hints}{If no backend binary is found, prints the
+\verb{apt-get install} command and a \code{.Rprofile} auto-start snippet.}
+}
+
+The return value is a list of class \code{"webterminal_config"} with a
+custom \code{format()} method that produces the printed report. The
+object can be stored and re-printed, or its elements accessed
+programmatically:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{cfg <- webterminal_doctor()
+cfg$ttyd$path       # "/usr/bin/ttyd" or NA
+cfg$ttyd$version    # "ttyd version 1.7.4" or NA
+cfg$ttyd$forced_by  # "WEBTERMINAL_TTYD" or NULL
+cfg$rstudio$available  # TRUE or FALSE
+cfg$daemons            # list of daemon records
+}\if{html}{\out{</div>}}
+}
 \examples{
 \dontrun{
+# Run the full diagnostic
 webterminal_doctor()
+
+# Store and access programmatically
+cfg <- webterminal_doctor()
+cfg$ttyd$path
+cfg$rstudio$available
+length(cfg$daemons)
 }
 }
 \seealso{
+\code{\link[=terminal_backends]{terminal_backends()}} for a quick backend overview without system
+probing, \code{\link[=terminal_status]{terminal_status()}} for daemon-only status,
+\code{\link[=webterminal_snippet]{webterminal_snippet()}} for the \code{.Rprofile} auto-start snippet.
+
 Other webterminal helpers:
 \code{\link[=webterminal_snippet]{webterminal_snippet()}}
 }

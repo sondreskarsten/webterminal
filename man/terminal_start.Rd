@@ -12,18 +12,25 @@ terminal_stop(backend = NULL)
 \arguments{
 \item{backend}{Character string naming the backend.
 One of \code{"ttyd"}, \code{"ttyd-tmux"}, or \code{"shellinabox"}.
-Defaults to \code{getOption("webterminal.backend", "ttyd")}.}
+Defaults to \code{getOption("webterminal.backend", "ttyd")}.
+See \code{\link[=terminal_backends]{terminal_backends()}} for backend properties.}
 
-\item{port}{Integer port to bind. Defaults to the deterministic
-port computed from the current username and backend offset.}
+\item{port}{Integer port to bind. \code{NULL} (default) computes the
+deterministic port from the current username and backend offset.
+Specify explicitly to override, e.g. when running multiple
+instances of the same backend.}
 
 \item{...}{Reserved for future use.}
 }
 \value{
-For \code{terminal_start()}, the daemon record (a list with
-\code{pid}, \code{port}, \code{backend}, \code{started}), invisibly.
-For \code{terminal_stop()}, \code{TRUE} if a daemon was stopped, \code{FALSE}
-otherwise, invisibly.
+For \code{terminal_start()}, the daemon record (a named list
+with elements \code{pid} (integer), \code{port} (integer), \code{backend}
+(character), \code{url} (character or \code{NULL}), and \code{started}
+(POSIXct)), invisibly. Returns \code{NULL} invisibly if the port is
+occupied by a non-webterminal process.
+
+For \code{terminal_stop()}, \code{TRUE} if a daemon was found and stopped,
+\code{FALSE} otherwise, invisibly.
 }
 \description{
 \code{terminal_start()} launches a \code{ttyd} or \code{shellinabox} daemon bound
@@ -33,14 +40,88 @@ session and must be stopped explicitly with \code{terminal_stop()}.
 \details{
 \code{terminal_stop()} sends \code{SIGTERM} to the daemon on the given port
 and removes it from the daemon registry.
+\subsection{Daemon lifecycle}{
+
+Daemons are launched via \code{system2("bash", script, wait = FALSE)}
+where the script (shipped in \verb{inst/scripts/}) calls \verb{nohup ttyd ... &}. The forked process is \strong{reparented to PID 1} — it is not
+a child of the R process and is not affected by R session exit,
+\code{\link[=q]{q()}}, or \code{rstudio-server} restarts.
+
+The daemon's PID and metadata are recorded in a file at
+\code{tools::R_user_dir("webterminal", "cache")/daemons.rds}. This
+allows \code{\link[=terminal_status]{terminal_status()}} and \code{terminal_stop()} to find daemons
+started in a previous R session. Dead PIDs are pruned
+automatically on every status check.
+}
+
+\subsection{Port allocation}{
+
+When \code{port} is \code{NULL} (the default), the port is computed
+deterministically:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{base = 4200 + (sum of UTF-8 codepoints in $USER) mod 90
+port = base + backend_offset
+}\if{html}{\out{</div>}}
+
+where \code{backend_offset} is 0 for \code{ttyd}, 1 for \code{ttyd-tmux}, and 2
+for \code{shellinabox}. This means different backends for the same user
+and different users on the same host get non-overlapping ports
+without coordination.
+
+Override the base port with \code{options(webterminal.port = 7681L)} or
+\code{Sys.setenv(WEBTERMINAL_PORT = "7681")}.
+}
+
+\subsection{Idempotency}{
+
+Calling \code{terminal_start()} when the daemon is already running
+returns the existing daemon record and prints a message — it does
+not launch a second instance.
+
+If the port is occupied by a process \emph{not} managed by webterminal
+(i.e. not in the daemon registry), \code{terminal_start()} prints a
+warning and returns \code{NULL} invisibly.
+}
+
+\subsection{What terminal_stop does}{
+
+\code{terminal_stop()} resolves the port for the given backend, looks up
+the PID (from the registry or via \code{ss -tlnp}), sends \code{SIGTERM} via
+\code{\link[tools:pskill]{tools::pskill()}}, waits 0.5 seconds, and removes the entry from
+the registry. If the backend is \code{ttyd-tmux}, the underlying \code{tmux}
+session is \strong{not} killed — only the \code{ttyd} process is stopped. The
+tmux session can be reattached by calling \code{terminal_start()} again.
+}
 }
 \examples{
 \dontrun{
-terminal_start("ttyd")
+# Start the default backend
+d <- terminal_start()
+d$pid
+d$port
+
+# Start a persistent terminal with tmux
+terminal_start("ttyd-tmux")
+
+# Start on a specific port
+terminal_start("ttyd", port = 9999L)
+
+# Check what's running
+terminal_status()
+
+# Stop a specific backend
 terminal_stop("ttyd")
+
+# Stop the tmux-backed terminal (tmux session survives)
+terminal_stop("ttyd-tmux")
 }
 }
 \seealso{
+\code{\link[=web_terminal]{web_terminal()}} to start and open in one call,
+\code{\link[=terminal_status]{terminal_status()}} to inspect running daemons,
+\code{\link[=terminal_backends]{terminal_backends()}} for backend comparison,
+\code{\link[=webterminal_snippet]{webterminal_snippet()}} for \code{.Rprofile} auto-start.
+
 Other webterminal:
 \code{\link[=terminal_backends]{terminal_backends()}},
 \code{\link[=terminal_status]{terminal_status()}},

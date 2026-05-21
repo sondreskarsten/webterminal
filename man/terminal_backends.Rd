@@ -7,17 +7,43 @@
 terminal_backends()
 }
 \value{
-A data frame with one row per backend, invisibly.
+A data frame with columns \code{backend}, \code{port_offset},
+\code{transport}, \code{persistent}, \code{script}, \code{binary}, \code{needs_tmux},
+invisibly.
 }
 \description{
 Returns the backend specification table showing each backend's
 name, transport type, persistence, required binary, and launcher
-script.
+script. Also checks whether each binary is installed.
+}
+\details{
+webterminal supports three backends:
+
+\describe{
+\item{\code{ttyd}}{Lightweight web terminal using WebSocket transport
+via libwebsockets. Ephemeral — closing the browser tab ends the
+shell. Fastest option.}
+\item{\code{ttyd-tmux}}{Same \code{ttyd} daemon, but wrapping a \code{tmux}
+session. Persistent — closing the tab does not kill the shell;
+reconnecting reattaches with full scrollback. Recommended for
+daily use.}
+\item{\code{shellinabox}}{AJAX long-polling transport. Persistent via
+\code{tmux}. Noticeably slower than \code{ttyd}; use only when \code{ttyd} is
+unavailable. Last upstream release: v2.21 (2018).}
+}
+
+The printed output shows the transport type, persistence mode, and
+whether each binary is found on \code{PATH}. The returned data frame
+includes the script name and binary name for each backend.
 }
 \examples{
+# This runs without system dependencies
 terminal_backends()
 }
 \seealso{
+\code{\link[=web_terminal]{web_terminal()}} to open a terminal, \code{\link[=terminal_start]{terminal_start()}} to launch
+a specific backend, \code{\link[=webterminal_doctor]{webterminal_doctor()}} for a full diagnostic.
+
 Other webterminal:
 \code{\link[=terminal_start]{terminal_start()}},
 \code{\link[=terminal_status]{terminal_status()}},

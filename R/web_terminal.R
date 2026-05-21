@@ -5,28 +5,93 @@
 #' `start` is `TRUE` (or `NA` in an interactive session), it will be
 #' started automatically.
 #'
+#' @details
+#' `web_terminal()` is the primary user-facing entry point. It
+#' combines daemon management and viewer dispatch in a single call:
+#'
+#' 1. Resolves the backend (from the argument, then
+#'    `getOption("webterminal.backend")`, then `"ttyd"`).
+#' 2. Computes the deterministic port for that backend and user
+#'    (see [terminal_start()] for the port-allocation scheme).
+#' 3. Probes the port via TCP `socketConnection()`. If the daemon is
+#'    not listening and `start` permits, launches it via the bundled
+#'    shell script in `inst/scripts/`.
+#' 4. Calls [rstudioapi::viewer()] (or [utils::browseURL()] outside
+#'    RStudio) with `http://127.0.0.1:<port>/`. On RStudio Server,
+#'    the IDE rewrites this to a `/p/<hex>/` proxy URL that forwards
+#'    through the existing ingress port.
+#'
+#' The daemon is a **detached process** — it survives R session exit,
+#' `q()`, and even `rstudio-server` restarts. Stop it explicitly
+#' with [terminal_stop()] or by killing the PID shown in
+#' [terminal_status()].
+#'
+#' When `viewer = "url"`, no viewer or browser is opened; the URL is
+#' returned invisibly. This is useful for scripting or passing the URL
+#' to another tool.
+#'
 #' @param backend Character string naming the backend.
 #'   One of `"ttyd"`, `"ttyd-tmux"`, or `"shellinabox"`.
 #'   Defaults to `getOption("webterminal.backend", "ttyd")`.
-#' @param viewer How to open the terminal. `"auto"` uses the RStudio
-#'   viewer pane when available, otherwise `browseURL()`. `"rstudio"`
-#'   forces the viewer pane (errors if unavailable). `"browser"` forces
-#'   the system browser. `"url"` returns the URL without opening
-#'   anything.
-#' @param start Whether to start the daemon if it is not running.
-#'   `NA` (default) starts in interactive sessions and errors in
-#'   non-interactive sessions. `TRUE` always starts. `FALSE` never
-#'   starts.
+#'   See [terminal_backends()] for a comparison of transport,
+#'   persistence, and system requirements.
+#' @param viewer How to open the terminal:
+#'   \describe{
+#'     \item{`"auto"`}{(default) Uses the RStudio Viewer pane when
+#'       [rstudioapi::isAvailable()] is `TRUE`, otherwise falls back
+#'       to [utils::browseURL()].}
+#'     \item{`"rstudio"`}{Forces the Viewer pane. Raises
+#'       `webterminal_rstudio_proxy_unavailable` if RStudio is not
+#'       detected.}
+#'     \item{`"browser"`}{Forces the system browser via
+#'       [utils::browseURL()].}
+#'     \item{`"url"`}{Returns the URL invisibly without opening
+#'       anything. Useful for piping or programmatic use.}
+#'   }
+#' @param start Whether to start the daemon if it is not running:
+#'   \describe{
+#'     \item{`NA`}{(default) Starts the daemon in interactive
+#'       sessions; raises `webterminal_daemon_unreachable` in
+#'       non-interactive sessions (e.g. `Rscript`, `R CMD check`).}
+#'     \item{`TRUE`}{Always starts the daemon, even
+#'       non-interactively.}
+#'     \item{`FALSE`}{Never starts the daemon; errors if not already
+#'       running.}
+#'   }
 #'
-#' @returns The terminal URL, invisibly.
+#' @returns The terminal URL as a character string, invisibly.
+#'
+#' @seealso
+#' [terminal_start()] and [terminal_stop()] for explicit daemon
+#' lifecycle control, [terminal_status()] to check running daemons,
+#' [webterminal_doctor()] to diagnose the setup,
+#' [webterminal_snippet()] for `.Rprofile` auto-start.
 #'
 #' @family webterminal
 #' @export
 #' @examples
+#' # List available backends (runs without system deps)
+#' terminal_backends()
+#'
 #' \dontrun{
+#' # Open the default terminal (ttyd)
 #' web_terminal()
+#'
+#' # Open a persistent terminal with tmux
 #' web_terminal("ttyd-tmux")
+#'
+#' # Get the URL without opening a viewer
 #' url <- web_terminal(viewer = "url")
+#'
+#' # Set a default backend for the session
+#' options(webterminal.backend = "ttyd-tmux")
+#' web_terminal()
+#'
+#' # Force browser instead of RStudio viewer
+#' web_terminal(viewer = "browser")
+#'
+#' # Non-interactive: error if daemon not running
+#' web_terminal(start = FALSE)
 #' }
 web_terminal <- function(backend = NULL,
                          viewer = c("auto", "rstudio", "browser", "url"),

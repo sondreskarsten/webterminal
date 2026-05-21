@@ -12,7 +12,8 @@ One of \code{"ttyd"}, \code{"ttyd-tmux"}, or \code{"shellinabox"}.
 Defaults to \code{getOption("webterminal.backend", "ttyd")}.}
 }
 \value{
-The snippet as an invisible character string.
+The snippet as an invisible character string (valid R
+code that can be parsed with \code{\link[=parse]{parse()}}).
 }
 \description{
 Prints a code snippet that can be pasted into \verb{~/.Rprofile} to
@@ -20,11 +21,36 @@ automatically start a terminal daemon when RStudio Server starts.
 The snippet is printed to the console; it is \strong{never} written to
 any file by this function.
 }
+\details{
+The generated snippet is guarded by \code{interactive()} and
+\code{rstudioapi::isAvailable()}, so it will not fire during
+\code{Rscript}, \verb{R CMD check}, or RMarkdown rendering. It uses
+\code{try(..., silent = TRUE)} so a missing \code{ttyd} binary does not
+block R startup.
+
+To install the snippet, open your \code{.Rprofile} (e.g. via
+\code{usethis::edit_r_profile()}) and paste the printed text.
+webterminal deliberately does not write to \code{.Rprofile} itself
+— this is a CRAN policy requirement (packages must not write to
+the user's home filespace without explicit confirmation).
+
+The snippet calls \code{\link[=terminal_start]{terminal_start()}}, not \code{\link[=web_terminal]{web_terminal()}}, so it
+starts the daemon without opening a viewer. Call \code{\link[=web_terminal]{web_terminal()}}
+manually when you want to see the terminal.
+}
 \examples{
+# This runs without system dependencies
 snippet <- webterminal_snippet("ttyd")
 cat(snippet)
+
+# Verify the snippet is valid R
+parse(text = snippet)
 }
 \seealso{
+\code{\link[=terminal_start]{terminal_start()}} which the snippet calls,
+\code{\link[=webterminal_doctor]{webterminal_doctor()}} which also prints the snippet when no
+backend is installed.
+
 Other webterminal helpers:
 \code{\link[=webterminal_doctor]{webterminal_doctor()}}
 }

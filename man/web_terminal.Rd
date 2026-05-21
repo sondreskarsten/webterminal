@@ -13,21 +13,37 @@ web_terminal(
 \arguments{
 \item{backend}{Character string naming the backend.
 One of \code{"ttyd"}, \code{"ttyd-tmux"}, or \code{"shellinabox"}.
-Defaults to \code{getOption("webterminal.backend", "ttyd")}.}
+Defaults to \code{getOption("webterminal.backend", "ttyd")}.
+See \code{\link[=terminal_backends]{terminal_backends()}} for a comparison of transport,
+persistence, and system requirements.}
 
-\item{viewer}{How to open the terminal. \code{"auto"} uses the RStudio
-viewer pane when available, otherwise \code{browseURL()}. \code{"rstudio"}
-forces the viewer pane (errors if unavailable). \code{"browser"} forces
-the system browser. \code{"url"} returns the URL without opening
-anything.}
+\item{viewer}{How to open the terminal:
+\describe{
+\item{\code{"auto"}}{(default) Uses the RStudio Viewer pane when
+\code{\link[rstudioapi:isAvailable]{rstudioapi::isAvailable()}} is \code{TRUE}, otherwise falls back
+to \code{\link[utils:browseURL]{utils::browseURL()}}.}
+\item{\code{"rstudio"}}{Forces the Viewer pane. Raises
+\code{webterminal_rstudio_proxy_unavailable} if RStudio is not
+detected.}
+\item{\code{"browser"}}{Forces the system browser via
+\code{\link[utils:browseURL]{utils::browseURL()}}.}
+\item{\code{"url"}}{Returns the URL invisibly without opening
+anything. Useful for piping or programmatic use.}
+}}
 
-\item{start}{Whether to start the daemon if it is not running.
-\code{NA} (default) starts in interactive sessions and errors in
-non-interactive sessions. \code{TRUE} always starts. \code{FALSE} never
-starts.}
+\item{start}{Whether to start the daemon if it is not running:
+\describe{
+\item{\code{NA}}{(default) Starts the daemon in interactive
+sessions; raises \code{webterminal_daemon_unreachable} in
+non-interactive sessions (e.g. \code{Rscript}, \verb{R CMD check}).}
+\item{\code{TRUE}}{Always starts the daemon, even
+non-interactively.}
+\item{\code{FALSE}}{Never starts the daemon; errors if not already
+running.}
+}}
 }
 \value{
-The terminal URL, invisibly.
+The terminal URL as a character string, invisibly.
 }
 \description{
 Opens a browser-based terminal connected to a locally running
@@ -35,14 +51,63 @@ Opens a browser-based terminal connected to a locally running
 \code{start} is \code{TRUE} (or \code{NA} in an interactive session), it will be
 started automatically.
 }
+\details{
+\code{web_terminal()} is the primary user-facing entry point. It
+combines daemon management and viewer dispatch in a single call:
+\enumerate{
+\item Resolves the backend (from the argument, then
+\code{getOption("webterminal.backend")}, then \code{"ttyd"}).
+\item Computes the deterministic port for that backend and user
+(see \code{\link[=terminal_start]{terminal_start()}} for the port-allocation scheme).
+\item Probes the port via TCP \code{socketConnection()}. If the daemon is
+not listening and \code{start} permits, launches it via the bundled
+shell script in \verb{inst/scripts/}.
+\item Calls \code{\link[rstudioapi:viewer]{rstudioapi::viewer()}} (or \code{\link[utils:browseURL]{utils::browseURL()}} outside
+RStudio) with \verb{http://127.0.0.1:<port>/}. On RStudio Server,
+the IDE rewrites this to a \verb{/p/<hex>/} proxy URL that forwards
+through the existing ingress port.
+}
+
+The daemon is a \strong{detached process} — it survives R session exit,
+\code{q()}, and even \code{rstudio-server} restarts. Stop it explicitly
+with \code{\link[=terminal_stop]{terminal_stop()}} or by killing the PID shown in
+\code{\link[=terminal_status]{terminal_status()}}.
+
+When \code{viewer = "url"}, no viewer or browser is opened; the URL is
+returned invisibly. This is useful for scripting or passing the URL
+to another tool.
+}
 \examples{
+# List available backends (runs without system deps)
+terminal_backends()
+
 \dontrun{
+# Open the default terminal (ttyd)
 web_terminal()
+
+# Open a persistent terminal with tmux
 web_terminal("ttyd-tmux")
+
+# Get the URL without opening a viewer
 url <- web_terminal(viewer = "url")
+
+# Set a default backend for the session
+options(webterminal.backend = "ttyd-tmux")
+web_terminal()
+
+# Force browser instead of RStudio viewer
+web_terminal(viewer = "browser")
+
+# Non-interactive: error if daemon not running
+web_terminal(start = FALSE)
 }
 }
 \seealso{
+\code{\link[=terminal_start]{terminal_start()}} and \code{\link[=terminal_stop]{terminal_stop()}} for explicit daemon
+lifecycle control, \code{\link[=terminal_status]{terminal_status()}} to check running daemons,
+\code{\link[=webterminal_doctor]{webterminal_doctor()}} to diagnose the setup,
+\code{\link[=webterminal_snippet]{webterminal_snippet()}} for \code{.Rprofile} auto-start.
+
 Other webterminal:
 \code{\link[=terminal_backends]{terminal_backends()}},
 \code{\link[=terminal_start]{terminal_start()}},

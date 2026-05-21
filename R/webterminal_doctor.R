@@ -4,15 +4,74 @@
 #' port status, and prints a structured report with actionable hints
 #' for anything missing.
 #'
-#' @returns A list of class `"webterminal_config"` with elements
-#'   `ttyd`, `shellinaboxd`, `tmux`, `bash`, `ss`, `rstudio`, and
-#'   `daemons`, invisibly.
+#' @details
+#' `webterminal_doctor()` is the recommended first function to call
+#' after installing the package. It performs the following checks:
+#'
+#' \describe{
+#'   \item{Binary detection}{Searches for `ttyd`, `shellinaboxd`,
+#'     `tmux`, `bash`, and `ss` using the same precedence as
+#'     [terminal_start()]: environment variable override (e.g.
+#'     `WEBTERMINAL_TTYD`), then `Sys.which()`. Reports the path and
+#'     version of each found binary.}
+#'   \item{RStudio detection}{Calls
+#'     [rstudioapi::isAvailable()] to determine whether the
+#'     `/p/<hex>/` viewer proxy will work.}
+#'   \item{Daemon inventory}{Reads the daemon registry from
+#'     `tools::R_user_dir("webterminal", "cache")/daemons.rds`,
+#'     prunes dead PIDs, and lists surviving daemons with their port,
+#'     PID, and start time.}
+#'   \item{Install hints}{If no backend binary is found, prints the
+#'     `apt-get install` command and a `.Rprofile` auto-start snippet.}
+#' }
+#'
+#' The return value is a list of class `"webterminal_config"` with a
+#' custom `format()` method that produces the printed report. The
+#' object can be stored and re-printed, or its elements accessed
+#' programmatically:
+#'
+#' ```
+#' cfg <- webterminal_doctor()
+#' cfg$ttyd$path       # "/usr/bin/ttyd" or NA
+#' cfg$ttyd$version    # "ttyd version 1.7.4" or NA
+#' cfg$ttyd$forced_by  # "WEBTERMINAL_TTYD" or NULL
+#' cfg$rstudio$available  # TRUE or FALSE
+#' cfg$daemons            # list of daemon records
+#' ```
+#'
+#' @returns A list of class `"webterminal_config"` with elements:
+#' \describe{
+#'   \item{`ttyd`}{List with `path`, `version`, `forced_by`.}
+#'   \item{`shellinaboxd`}{List with `path`, `version`, `forced_by`.}
+#'   \item{`tmux`}{List with `path`, `version`.}
+#'   \item{`bash`}{List with `path`.}
+#'   \item{`ss`}{List with `path`.}
+#'   \item{`rstudio`}{List with `available` (logical).}
+#'   \item{`daemons`}{List of daemon records (each a list with `pid`,
+#'     `port`, `backend`, `url`, `started`). Empty list if none
+#'     running.}
+#'   \item{`platform`}{Character. Operating system name from
+#'     `Sys.info()`.}
+#' }
+#' Returned invisibly; the report is printed as a side effect.
+#'
+#' @seealso
+#' [terminal_backends()] for a quick backend overview without system
+#' probing, [terminal_status()] for daemon-only status,
+#' [webterminal_snippet()] for the `.Rprofile` auto-start snippet.
 #'
 #' @family webterminal helpers
 #' @export
 #' @examples
 #' \dontrun{
+#' # Run the full diagnostic
 #' webterminal_doctor()
+#'
+#' # Store and access programmatically
+#' cfg <- webterminal_doctor()
+#' cfg$ttyd$path
+#' cfg$rstudio$available
+#' length(cfg$daemons)
 #' }
 webterminal_doctor <- function() {
   ttyd <- find_ttyd()
@@ -59,12 +118,17 @@ webterminal_doctor <- function() {
   invisible(config)
 }
 
+#' @rdname webterminal_doctor
+#' @param x A `webterminal_config` object returned by
+#'   [webterminal_doctor()].
+#' @param ... Additional arguments (currently unused).
 #' @export
 print.webterminal_config <- function(x, ...) {
   cat(format(x, ...), sep = "")
   invisible(x)
 }
 
+#' @rdname webterminal_doctor
 #' @export
 format.webterminal_config <- function(x, ...) {
   ok <- function(v) !is.na(v) && nzchar(v)
