@@ -1,0 +1,225 @@
+---
+title: "Getting started with webterminal"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with webterminal}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## What webterminal does
+
+webterminal opens a fast, browser-based terminal inside the RStudio
+Server viewer pane. It works by launching a lightweight web-terminal
+daemon (`ttyd` or `shellinabox`) on localhost and letting RStudio
+Server's built-in reverse proxy (`/p/<hex>/`) forward the connection
+to your browser.
+
+The result is a terminal tab that feels native — WebSocket transport,
+real copy/paste, and optional `tmux` persistence across browser
+reconnects.
+
+## Prerequisites
+
+webterminal is a connector, not an installer. You need three system
+binaries present on the RStudio Server host before the package can do
+anything useful:
+
+```{bash}
+sudo apt-get install ttyd tmux iproute2
+```
+
+See `vignette("installing-ttyd")` for detailed per-distro instructions.
+
+## Quick start
+
+```{r}
+library(webterminal)
+
+# Check what's installed and what's missing
+webterminal_doctor()
+```
+
+The doctor report shows each binary's path and version, whether
+RStudio Server is detected, and any running daemons. If something is
+missing, it prints the exact install command.
+
+### Open a terminal
+
+```{r}
+web_terminal()
+```
+This does three things in sequence:
+
+1. Checks whether a `ttyd` daemon is already listening on your
+   deterministic port.
+2. If not (and you're in an interactive session), launches one via the
+   bundled `inst/scripts/start-ttyd.sh`.
+3. Calls `rstudioapi::viewer()` with the localhost URL, which RStudio
+   Server proxies to your browser.
+
+The terminal opens in the Viewer pane. Click the "Show in new window"
+icon to pop it out into a full browser tab.
+
+### Choose a backend
+
+webterminal ships three backends:
+
+```{r}
+terminal_backends()
+```
+
+| Backend | Transport | Persistent | Use case |
+|---|---|---|---|
+| `ttyd` | WebSocket | No | Lightweight, ephemeral shell |
+| `ttyd-tmux` | WebSocket | Yes | Survives tab close / reconnect |
+| `shellinabox` | AJAX | Yes | Fallback when ttyd unavailable |
+
+Switch backends by name:
+
+```{r}
+web_terminal("ttyd-tmux")
+```
+
+Or set a default for the session:
+
+```{r}
+options(webterminal.backend = "ttyd-tmux")
+web_terminal()
+```
+
+## Explicit lifecycle management
+
+For finer control, use `terminal_start()` and `terminal_stop()`
+directly:
+
+```{r}
+# Start the daemon (survives R session restart)
+terminal_start("ttyd-tmux")
+
+# Check what's running
+terminal_status()
+
+# Open the viewer (daemon already up, so instant)
+web_terminal("ttyd-tmux")
+
+# Later: stop the daemon
+terminal_stop("ttyd-tmux")
+```
+
+Daemons started by webterminal are **detached processes** — they
+survive R session restarts, RStudio Server restarts, and browser tab
+closures (when using `ttyd-tmux`). They must be stopped explicitly
+with `terminal_stop()`.
+
+The daemon registry is persisted to
+`tools::R_user_dir("webterminal", "cache")`, so `terminal_status()`
+can find daemons started in a previous R session.
+
+## Multiple backends simultaneously
+
+Each backend binds to a different port (deterministic, based on your
+username). You can run all three at once:
+```{r}
+terminal_start("ttyd")
+terminal_start("ttyd-tmux")
+terminal_status()
+```
+
+## Auto-start on RStudio Server login
+
+webterminal never modifies your `.Rprofile`. Instead, it prints a
+snippet you can paste yourself:
+
+```{r}
+webterminal_snippet("ttyd-tmux")
+```
+
+This prints:
+
+```r
+if (interactive() && requireNamespace("rstudioapi", quietly = TRUE) &&
+    rstudioapi::isAvailable()) {
+  try(webterminal::terminal_start("ttyd-tmux"), silent = TRUE)
+}
+```
+
+Paste it into `~/.Rprofile` (open with `usethis::edit_r_profile()`)
+and every future RStudio session will have a terminal daemon ready.
+
+## Port allocation
+
+webterminal computes a deterministic base port from your username:
+
+```
+base = 4200 + (sum of UTF-8 codepoints in $USER) mod 90
+```
+
+Each backend adds a fixed offset (0, 1, 2), so different backends
+never collide. Override the base port with:
+
+```{r}
+# Per-session
+options(webterminal.port = 7681L)
+
+# Per-environment (e.g. in .Renviron)
+Sys.setenv(WEBTERMINAL_PORT = "7681")
+```
+
+## Viewer modes
+
+```{r}
+# Default: RStudio viewer if available, else system browser
+web_terminal()
+
+# Force RStudio viewer (errors outside RStudio)
+web_terminal(viewer = "rstudio")
+
+# Force system browser
+web_terminal(viewer = "browser")
+
+# Just return the URL (for scripting / piping)
+url <- web_terminal(viewer = "url")
+```
+
+## Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `WEBTERMINAL_PORT` | Override base port (takes precedence over option) |
+| `WEBTERMINAL_TTYD` | Force path to `ttyd` binary |
+| `WEBTERMINAL_SHELLINABOXD` | Force path to `shellinaboxd` binary |
+
+When a binary path is forced, `webterminal_doctor()` reports it:
+
+```
+NOTE: ttyd path was forced by WEBTERMINAL_TTYD
+```
+
+## Troubleshooting
+
+Run `webterminal_doctor()` first. Common issues:
+
+**"ttyd not found on PATH"**
+: Install ttyd. See `vignette("installing-ttyd")`.
+
+**"Daemon launched but port not responding after 3 seconds"**
+: The bundled launch script failed silently. Check the log at
+  `/tmp/webterminal-ttyd-<port>.log`.
+
+**Viewer pane shows a blank page**
+: The RStudio Server localhost proxy may not support WebSocket
+  upgrade. Check `www-proxy-localhost=1` in
+  `/etc/rstudio/rserver.conf`. See `vignette("architecture")`.
+
+**Terminal opens but immediately disconnects**
+: Your load balancer's idle timeout is too short. Set `--ping-interval`
+  in the launch script below the ALB timeout (default is 20 seconds).

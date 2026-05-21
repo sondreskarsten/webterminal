@@ -1,0 +1,225 @@
+---
+title: "Installing system dependencies"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Installing system dependencies}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+webterminal requires three system binaries that are **not installed
+by the R package**:
+
+| Binary | Purpose | Required? |
+|---|---|---|
+| `ttyd` | WebSocket-based terminal daemon | Yes (primary backend) |
+| `tmux` | Terminal multiplexer for session persistence | Yes for `ttyd-tmux` and `shellinabox` backends |
+| `ss` | Socket statistics for port probing | Recommended (falls back to `socketConnection()`) |
+
+Optional:
+
+| Binary | Purpose |
+|---|---|
+| `shellinaboxd` | AJAX-based terminal daemon (fallback when ttyd unavailable) |
+
+## Ubuntu / Debian
+
+### ttyd
+
+ttyd is in the `universe` repository on Ubuntu 22.04+ and in Debian
+`testing`/`unstable`:
+
+```{bash}
+sudo apt-get update
+sudo apt-get install ttyd
+```
+
+Verify:
+
+```{bash}
+ttyd --version
+# ttyd version 1.7.4
+```
+
+If your corporate mirror does not include the `universe` component,
+ask your platform team to add it, or install from the upstream
+release:
+
+```{bash}
+# Only if ttyd is not in your apt repos
+curl -sL https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64 \
+  -o /usr/local/bin/ttyd
+chmod +x /usr/local/bin/ttyd
+```
+
+### tmux and iproute2
+
+Both are in `main` and universally available:
+
+```{bash}
+sudo apt-get install tmux iproute2
+```
+
+### shellinabox (optional)
+
+shellinabox re-entered Debian `unstable` on 2025-10-17 (version
+2.21-1). On Ubuntu Jammy (22.04):
+
+```{bash}
+sudo apt-get install shellinabox
+```
+
+Note: shellinabox uses AJAX long-polling rather than WebSocket. It is
+noticeably slower than ttyd. Use it only when ttyd is unavailable.
+
+### All at once
+
+```{bash}
+sudo apt-get install ttyd tmux iproute2
+```
+
+## RHEL / Fedora / CentOS
+
+ttyd is not in the default RHEL/CentOS repos. Install from EPEL or
+the upstream binary:
+
+```{bash}
+# Fedora
+sudo dnf install ttyd tmux iproute
+
+# RHEL/CentOS (upstream binary)
+curl -sL https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64 \
+  -o /usr/local/bin/ttyd
+chmod +x /usr/local/bin/ttyd
+sudo dnf install tmux iproute
+```
+
+## macOS (Homebrew)
+
+ttyd is in Homebrew core:
+
+```{bash}
+brew install ttyd tmux
+```
+
+Note: webterminal is designed for RStudio Server (Linux). On macOS it
+works with RStudio Desktop but `rstudioapi::viewer()` opens a local
+Viewer pane rather than proxying through `/p/<hex>/`.
+
+## Alpine Linux
+
+```{bash}
+apk add ttyd tmux iproute2
+```
+
+## Docker containers
+
+If your RStudio Server runs inside a Docker container, add to the
+Dockerfile:
+
+```{bash}
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ttyd tmux iproute2 \
+  && rm -rf /var/lib/apt/lists/*
+```
+
+## Corporate environments with Nexus mirrors
+
+If your apt mirror is a Nexus proxy that only shadows specific
+components, check whether `universe` is included:
+
+```{bash}
+apt-cache policy ttyd
+```
+
+If it returns `Unable to locate package ttyd`, the mirror is missing
+the `universe` component. Either:
+
+1. Ask your platform team to add `universe` to the Nexus proxy, or
+2. Download the static binary directly (see Ubuntu section above), or
+3. Use `shellinabox` from `universe` (it entered `universe` earlier
+   than `ttyd` on some mirrors).
+
+## Verifying the installation from R
+
+After installing the system binaries, verify from R:
+
+```{r}
+library(webterminal)
+webterminal_doctor()
+```
+
+Expected output:
+
+```
+-- webterminal doctor -----------------------
+[ok] ttyd:         /usr/bin/ttyd
+    version:      ttyd version 1.7.4
+[!!] shellinaboxd: [NOT FOUND]
+[ok] tmux:         /usr/bin/tmux
+    version:      tmux 3.4
+[ok] bash:         /usr/bin/bash
+[ok] ss:           /usr/bin/ss
+[ok] RStudio:      available
+
+No daemons running.
+--------------------------------------------
+```
+
+`shellinaboxd [NOT FOUND]` is fine — it is optional. All other lines
+should show `[ok]`.
+
+## Disabling the system shellinabox service
+
+On Ubuntu, `apt-get install shellinabox` enables a system service
+bound to `0.0.0.0:4200`. webterminal manages its own shellinabox
+instance bound to `127.0.0.1`, so you should disable the system
+service:
+
+```{bash}
+sudo systemctl disable --now shellinabox
+sudo systemctl mask shellinabox
+```
+
+This is a one-time step. webterminal's daemon launches via
+`terminal_start("shellinabox")` on a user-specific port, bound to
+loopback only.
+
+## Disabling the system ttyd service
+
+Similarly, some distributions enable a system ttyd service on install.
+Disable it:
+
+```{bash}
+sudo systemctl disable --now ttyd
+sudo systemctl mask ttyd
+```
+
+webterminal launches its own ttyd instances on user-specific ports.
+
+## Overriding binary paths
+
+If ttyd is installed to a non-standard location, set the environment
+variable before loading the package:
+
+```{r}
+Sys.setenv(WEBTERMINAL_TTYD = "/opt/custom/bin/ttyd")
+library(webterminal)
+webterminal_doctor()  # should show "NOTE: ttyd path was forced by WEBTERMINAL_TTYD"
+```
+
+Or in `.Renviron`:
+
+```
+WEBTERMINAL_TTYD=/opt/custom/bin/ttyd
+```

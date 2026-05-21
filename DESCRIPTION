@@ -23,6 +23,8 @@ Imports:
 Suggests:
     cli (>= 3.6.0),
     httpuv,
+    knitr,
+    rmarkdown,
     spelling,
     testthat (>= 3.2.0),
     withr
@@ -32,4 +34,5 @@ URL: https://github.com/sondreskarsten/webterminal
 BugReports: https://github.com/sondreskarsten/webterminal/issues
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
+VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0

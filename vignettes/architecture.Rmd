@@ -1,0 +1,256 @@
+---
+title: "Architecture: how webterminal works"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Architecture: how webterminal works}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## The problem
+
+RStudio Server runs in a browser. Its built-in terminal pane routes
+keystrokes through the IDE's RPC subsystem, which adds latency — the
+terminal feels sluggish compared to a native SSH session.
+
+The ideal solution is a standalone web terminal (ttyd or shellinabox)
+running on the same host, but RStudio Server typically occupies the
+only inbound port. You cannot open additional ports without changing
+firewall rules or load balancer configuration.
+
+## The solution: RStudio Server's localhost proxy
+
+Open-source RStudio Server (not just Posit Workbench) includes a
+built-in reverse proxy for localhost ports. When the IDE calls
+`rstudioapi::viewer("http://127.0.0.1:7681/")`, the server:
+
+1. Reads the per-user **port token cookie** (`kPortTokenCookie`).
+2. Computes a scrambled hex ID from the token and port number via
+   `transformPort(portToken, port)`.
+3. Returns a URL of the form `/p/<8-or-9-hex-digits>/`.
+4. Proxies all subsequent HTTP and **WebSocket Upgrade** requests on
+   that path to `127.0.0.1:<port>` on the server host.
+
+This is the same mechanism that serves Shiny apps and Plumber APIs
+in the Viewer pane.
+
+### The key config switch
+
+In `/etc/rstudio/rserver.conf`:
+
+```
+www-proxy-localhost=1
+```
+
+This is **on by default**. If your terminal opens as a blank page,
+verify this setting has not been overridden to `0`.
+
+### URL pattern
+
+| Edition | URL form |
+|---|---|
+| Open-source RStudio Server | `https://host/p/<hex>/` |
+| Posit Workbench (multi-session) | `https://host/s/<session-id>/p/<hex>/` |
+
+The `<hex>` is **not** the literal port number. You cannot guess it;
+it must be computed by `rstudioapi::viewer()` or
+`rstudioapi::translateLocalUrl()`.
+
+## Request flow
+
+```
+Browser tab
+  │
+  ▼
+ALB / reverse proxy (existing infrastructure)
+  │
+  ▼
+rserver (port 8787)
+  │  parses /p/<hex>/, validates auth cookie + port token
+  │  forwards via Unix socket to rsession
+  ▼
+rsession
+  │  proxies to 127.0.0.1:<port>
+  │  handles HTTP Upgrade for WebSocket
+  ▼
+ttyd (port <port>, bound to 127.0.0.1)
+  │  xterm.js ↔ pty via WebSocket
+  ▼
+bash / tmux session
+```
+
+Every hop is either TCP loopback or a Unix-domain socket. There is no
+HTTP long-polling or RPC multiplexing in this path — it is a direct
+WebSocket stream from xterm.js in the browser to the pty on the
+server.
+
+## Authentication and security
+
+The `/p/<hex>/` proxy inherits RStudio Server's authentication. A
+request to `/p/<hex>/` without a valid `rstudio-csrf` session cookie
+is redirected to the login page.
+
+The port-token mechanism adds a second layer: even with a valid
+session cookie, a client cannot reach an arbitrary port without
+knowing the per-user port token. The token is set as a cookie by the
+IDE when `rstudioapi::viewer()` is called.
+
+### Security implications
+
+- **ttyd must bind to `127.0.0.1`**, not `0.0.0.0`. This ensures the
+  terminal is only reachable through the RStudio proxy, never
+  directly from the network.
+
+- **No additional authentication is needed on ttyd itself.** Do not
+  use ttyd's `--credential` flag; the proxy already gates access. A
+  `--credential` would send basic-auth headers through the proxy and
+  into browser history.
+
+- **`--check-origin`** should remain enabled on ttyd. It rejects
+  WebSocket handshakes whose `Origin` header doesn't match the
+  request's `Host`, which prevents cross-site WebSocket hijacking.
+
+- **Any user who can log into RStudio as your user can reach the
+  terminal.** The terminal is not an additional attack surface beyond
+  RStudio itself.
+
+### Cross-user isolation
+
+RStudio Server forwards `/p/<hex>/` requests through per-user
+Unix-domain sockets with UID validation. User A cannot reach User B's
+proxied ports, even if they guess the hex token. This is enforced in
+`ServerSessionProxy.cpp` (AGPL source).
+
+## WebSocket vs AJAX transport
+
+| Backend | Transport | Latency | Copy/paste |
+|---|---|---|---|
+| ttyd | WebSocket (libwebsockets + libuv) | Lowest — single WS frame stream | Native browser copy/paste in xterm.js |
+| shellinabox | AJAX long-polling | Higher — request/response per keystroke batch | shellinabox's own selection model |
+
+ttyd's WebSocket transport is materially faster than RStudio Server's
+built-in terminal pane, which routes through the IDE's RPC layer
+(itself a WebSocket/HTTP-fallback multiplex).
+
+## Session persistence with tmux
+
+The `ttyd-tmux` backend wraps ttyd around a tmux session:
+
+```
+ttyd → bash -c tmux-web-attach.sh → tmux new-session -s web
+                                     (or tmux attach-session -s web)
+```
+
+When you close the browser tab, the ttyd client disconnects but the
+tmux server and its child processes keep running. Reopening the URL
+(or calling `web_terminal("ttyd-tmux")` again) reattaches to the same
+tmux session with full scrollback.
+
+This survives:
+
+- Browser tab close / reopen
+- R session restart
+- `rstudio-server` service restart (the tmux process is not a child
+  of rserver)
+- Network disconnections (ttyd's xterm.js client auto-reconnects)
+
+It does **not** survive:
+
+- Host reboot (tmux is not a system service by default)
+- Explicit `terminal_stop("ttyd-tmux")` (sends SIGTERM to ttyd; tmux
+  session persists but is no longer web-accessible until restarted)
+- `tmux kill-server` (kills all tmux sessions)
+
+## Daemon lifecycle
+
+webterminal daemons are **out-of-process detached children**. When
+`terminal_start()` calls `system2("bash", script, wait = FALSE)`, the
+bash process forks ttyd, which immediately backgrounds itself (via
+`nohup ... &` in the script). The R process is not the parent of the
+daemon; the daemon is reparented to PID 1 (init).
+
+This means:
+
+- The daemon **survives** R session exit, `q()`, and `rstudio-server`
+  restart.
+- The daemon must be **explicitly stopped** with `terminal_stop()` or
+  by killing the PID.
+- The daemon's PID is recorded in
+  `tools::R_user_dir("webterminal", "cache")/daemons.rds` so it can
+  be found across R sessions.
+
+### Port allocation
+
+Each user gets a deterministic base port:
+
+```
+base = 4200 + (sum of UTF-8 codepoints in $USER) mod 90
+```
+
+Each backend adds a fixed offset:
+
+| Backend | Offset | Example port (user "analyst") |
+|---|---|---|
+| ttyd | 0 | 4265 |
+| ttyd-tmux | 1 | 4266 |
+| shellinabox | 2 | 4267 |
+
+This ensures different users on a shared host and different backends
+for the same user never collide, without requiring a port broker or
+lockfile.
+
+Override the base with `options(webterminal.port = 7681L)` or
+`WEBTERMINAL_PORT=7681`.
+
+## Load balancer considerations
+
+If RStudio Server sits behind an ALB / nginx / Apache reverse proxy,
+that proxy must:
+
+1. **Allow WebSocket Upgrade** — pass `Upgrade: websocket` and
+   `Connection: Upgrade` headers through to rserver. Most modern
+   ALBs do this by default.
+
+2. **Have a long idle timeout** — ttyd sends WebSocket ping frames
+   every 20 seconds (`--ping-interval 20` in the launch scripts), but
+   if the ALB's idle timeout is shorter than 20 seconds, the
+   connection will be dropped between pings. Posit recommends at least
+   60 seconds; for tmux sessions that may sit idle for hours, set the
+   ALB idle timeout to 3600 seconds.
+
+3. **Not strip `Sec-WebSocket-*` headers** — some WAFs strip these.
+   Verify with:
+
+```{bash}
+curl -v \
+  -H "Upgrade: websocket" \
+  -H "Connection: Upgrade" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  -H "Sec-WebSocket-Version: 13" \
+  "https://<host>/p/<hex>/ws"
+```
+
+The response must be `101 Switching Protocols`. If you get `200` or
+`400`, the proxy is intercepting the upgrade.
+
+## Comparison with alternatives
+
+| Approach | Installs new ports? | Outbound needed? | WebSocket? | Persist? |
+|---|---|---|---|---|
+| **webterminal (ttyd via /p/)** | No | No | Yes | Yes (tmux) |
+| Raw SSH from laptop | Yes (port 22) | No | N/A | Yes (tmux/screen) |
+| Tailscale / Cloudflare Tunnel | No | Yes (outbound) | N/A | Yes |
+| AWS SSM Session Manager | No | Yes (outbound to AWS) | No | No |
+| code-server via /p/ | No | No | Yes | Yes |
+| RStudio built-in terminal | No | No | WS/RPC fallback | No |
+
+webterminal occupies the "no new ports, no outbound, yes WebSocket,
+yes persistence" cell that no other approach fills.
