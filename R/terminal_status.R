@@ -38,17 +38,13 @@
 #' @family webterminal
 #' @export
 #' @examples
-#' \dontrun{
-#' # Check all backends
+#' # Runs without system deps — reports all backends as stopped
 #' terminal_status()
-#'
-#' # Check a specific backend
 #' terminal_status("ttyd")
 #'
 #' # Use programmatically
 #' s <- terminal_status()
 #' s[s$running, ]
-#' }
 terminal_status <- function(backend = "all") {
   if (identical(backend, "all")) {
     backends <- BACKENDS$backend

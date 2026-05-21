@@ -63,16 +63,13 @@
 #' @family webterminal helpers
 #' @export
 #' @examples
-#' \dontrun{
-#' # Run the full diagnostic
-#' webterminal_doctor()
-#'
-#' # Store and access programmatically
+#' # Runs without system deps — reports what's found and what's missing
 #' cfg <- webterminal_doctor()
+#'
+#' # Access programmatically
 #' cfg$ttyd$path
 #' cfg$rstudio$available
 #' length(cfg$daemons)
-#' }
 webterminal_doctor <- function() {
   ttyd <- find_ttyd()
   shellinaboxd <- find_shellinaboxd()

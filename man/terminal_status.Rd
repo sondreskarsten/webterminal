@@ -40,17 +40,13 @@ columns:
 }
 }
 \examples{
-\dontrun{
-# Check all backends
+# Runs without system deps — reports all backends as stopped
 terminal_status()
-
-# Check a specific backend
 terminal_status("ttyd")
 
 # Use programmatically
 s <- terminal_status()
 s[s$running, ]
-}
 }
 \seealso{
 \code{\link[=terminal_start]{terminal_start()}} and \code{\link[=terminal_stop]{terminal_stop()}} for daemon lifecycle,

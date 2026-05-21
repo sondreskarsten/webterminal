@@ -15,7 +15,6 @@ test_that("terminal_backends returns data.frame with correct rows", {
 })
 
 test_that("webterminal_doctor returns webterminal_config class", {
-  skip_on_cran()
   config <- webterminal_doctor()
   expect_s3_class(config, "webterminal_config")
   expect_true(is.list(config$ttyd))
@@ -24,7 +23,6 @@ test_that("webterminal_doctor returns webterminal_config class", {
 })
 
 test_that("format.webterminal_config produces readable output", {
-  skip_on_cran()
   config <- webterminal_doctor()
   formatted <- format(config)
   expect_type(formatted, "character")

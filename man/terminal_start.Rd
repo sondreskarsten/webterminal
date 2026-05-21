@@ -94,27 +94,22 @@ tmux session can be reattached by calling \code{terminal_start()} again.
 }
 }
 \examples{
-\dontrun{
-# Start the default backend
-d <- terminal_start()
-d$pid
-d$port
-
-# Start a persistent terminal with tmux
-terminal_start("ttyd-tmux")
-
-# Start on a specific port
-terminal_start("ttyd", port = 9999L)
-
-# Check what's running
+# Always runs — shows nothing running
 terminal_status()
 
-# Stop a specific backend
+\dontshow{if (interactive() && nzchar(Sys.which("ttyd"))) withAutoprint(\{ # examplesIf}
+# Full lifecycle: start, inspect, stop
+d <- terminal_start("ttyd")
+d$pid
+d$port
+terminal_status()
 terminal_stop("ttyd")
 
-# Stop the tmux-backed terminal (tmux session survives)
-terminal_stop("ttyd-tmux")
-}
+# Idempotent — calling start twice returns existing daemon
+terminal_start("ttyd")
+terminal_start("ttyd")
+terminal_stop("ttyd")
+\dontshow{\}) # examplesIf}
 }
 \seealso{
 \code{\link[=web_terminal]{web_terminal()}} to start and open in one call,

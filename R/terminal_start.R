@@ -87,27 +87,21 @@
 #' @family webterminal
 #' @export
 #' @examples
-#' \dontrun{
-#' # Start the default backend
-#' d <- terminal_start()
-#' d$pid
-#' d$port
-#'
-#' # Start a persistent terminal with tmux
-#' terminal_start("ttyd-tmux")
-#'
-#' # Start on a specific port
-#' terminal_start("ttyd", port = 9999L)
-#'
-#' # Check what's running
+#' # Always runs — shows nothing running
 #' terminal_status()
 #'
-#' # Stop a specific backend
+#' @examplesIf interactive() && nzchar(Sys.which("ttyd"))
+#' # Full lifecycle: start, inspect, stop
+#' d <- terminal_start("ttyd")
+#' d$pid
+#' d$port
+#' terminal_status()
 #' terminal_stop("ttyd")
 #'
-#' # Stop the tmux-backed terminal (tmux session survives)
-#' terminal_stop("ttyd-tmux")
-#' }
+#' # Idempotent — calling start twice returns existing daemon
+#' terminal_start("ttyd")
+#' terminal_start("ttyd")
+#' terminal_stop("ttyd")
 terminal_start <- function(backend = NULL, port = NULL, ...) {
   spec <- backend_spec(backend)
   if (is.null(port)) port <- terminal_port(spec$backend)

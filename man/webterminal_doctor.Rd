@@ -75,16 +75,13 @@ cfg$daemons            # list of daemon records
 }\if{html}{\out{</div>}}
 }
 \examples{
-\dontrun{
-# Run the full diagnostic
-webterminal_doctor()
-
-# Store and access programmatically
+# Runs without system deps — reports what's found and what's missing
 cfg <- webterminal_doctor()
+
+# Access programmatically
 cfg$ttyd$path
 cfg$rstudio$available
 length(cfg$daemons)
-}
 }
 \seealso{
 \code{\link[=terminal_backends]{terminal_backends()}} for a quick backend overview without system

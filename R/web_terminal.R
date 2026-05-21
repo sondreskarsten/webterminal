@@ -70,29 +70,18 @@
 #' @family webterminal
 #' @export
 #' @examples
-#' # List available backends (runs without system deps)
+#' # Always runs — no system deps needed
 #' terminal_backends()
 #'
-#' \dontrun{
-#' # Open the default terminal (ttyd)
-#' web_terminal()
+#' @examplesIf interactive() && nzchar(Sys.which("ttyd"))
+#' # Start ttyd, get the URL, then stop
+#' url <- web_terminal("ttyd", viewer = "url", start = TRUE)
+#' url
+#' terminal_stop("ttyd")
 #'
-#' # Open a persistent terminal with tmux
-#' web_terminal("ttyd-tmux")
-#'
-#' # Get the URL without opening a viewer
-#' url <- web_terminal(viewer = "url")
-#'
-#' # Set a default backend for the session
-#' options(webterminal.backend = "ttyd-tmux")
-#' web_terminal()
-#'
-#' # Force browser instead of RStudio viewer
-#' web_terminal(viewer = "browser")
-#'
-#' # Non-interactive: error if daemon not running
-#' web_terminal(start = FALSE)
-#' }
+#' # Persistent terminal with tmux
+#' web_terminal("ttyd-tmux", viewer = "url", start = TRUE)
+#' terminal_stop("ttyd-tmux")
 web_terminal <- function(backend = NULL,
                          viewer = c("auto", "rstudio", "browser", "url"),
                          start = NA) {
