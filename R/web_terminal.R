@@ -21,6 +21,27 @@
 #'    the IDE rewrites this to a `/p/<hex>/` proxy URL that forwards
 #'    through the existing ingress port.
 #'
+#' ## The `/p/<hex>/` proxy
+#'
+#' Open-source RStudio Server includes a built-in reverse proxy for
+#' localhost ports, controlled by `www-proxy-localhost=1` in
+#' `/etc/rstudio/rserver.conf` (on by default). When
+#' [rstudioapi::viewer()] receives a `http://127.0.0.1:<port>/` URL,
+#' the server computes a scrambled 8–9 hex-digit token from a
+#' per-user port cookie and the port number, then serves the proxied
+#' content at `https://<host>/p/<hex>/`. Both HTTP and WebSocket
+#' Upgrade are forwarded. This is the same mechanism that powers
+#' Shiny apps and Plumber APIs in the Viewer pane.
+#'
+#' The proxy inherits RStudio Server's authentication — requests
+#' without a valid session cookie are redirected to the login page.
+#' Cross-user access is prevented by UID validation on the
+#' per-user Unix-domain socket. The daemon **must** bind to
+#' `127.0.0.1` (not `0.0.0.0`) so it is only reachable through the
+#' proxy, never directly from the network.
+#'
+#' ## Daemon lifecycle
+#'
 #' The daemon is a **detached process** — it survives R session exit,
 #' `q()`, and even `rstudio-server` restarts. Stop it explicitly
 #' with [terminal_stop()] or by killing the PID shown in

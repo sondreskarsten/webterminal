@@ -37,4 +37,4 @@ jobs:
 
       - name: Run all tests (including integration)
         run: |
-          Rscript -e 'testthat::test_dir("tests/testthat", reporter = "summary")'
+          Rscript -e 'testthat::test_local(reporter = "summary")'
